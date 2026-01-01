@@ -3,7 +3,7 @@
 # ============================================
 # Stage 1: Base image with common dependencies
 # ============================================
-FROM node:20-alpine AS base
+FROM node:25-alpine AS base
 
 # Install security updates
 RUN apk update && apk upgrade && \
