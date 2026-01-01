@@ -1,0 +1,131 @@
+# syntax=docker/dockerfile:1.6
+
+# ============================================
+# Stage 1: Base image with common dependencies
+# ============================================
+FROM node:20-alpine AS base
+
+# Install security updates and required packages
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    dumb-init \
+    curl \
+    && rm -rf /var/cache/apk/*
+
+# Set working directory
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs appuser
+
+# ============================================
+# Stage 2: Dependencies installation
+# ============================================
+FROM base AS deps
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@8 --activate
+
+# Copy package files
+COPY backend/package.json backend/pnpm-lock.yaml* ./
+
+# Install all dependencies (including devDependencies for build)
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# ============================================
+# Stage 3: Development image
+# ============================================
+FROM base AS development
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@8 --activate
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source code
+COPY backend/ ./
+
+# Set environment
+ENV NODE_ENV=development
+ENV PORT=3000
+
+# Expose ports
+EXPOSE 3000 9229
+
+# Use non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Start with nodemon for hot reload
+CMD ["pnpm", "dev"]
+
+# ============================================
+# Stage 4: Build stage
+# ============================================
+FROM deps AS builder
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@8 --activate
+
+# Copy source code
+COPY backend/ ./
+
+# Build TypeScript
+RUN pnpm build
+
+# Prune dev dependencies
+RUN pnpm prune --prod
+
+# ============================================
+# Stage 5: Production image
+# ============================================
+FROM base AS production
+
+# Build arguments for versioning
+ARG VERSION=unknown
+ARG BUILD_DATE=unknown
+
+# Labels for container metadata
+LABEL org.opencontainers.image.title="Foohut Backend"
+LABEL org.opencontainers.image.description="Foohut Backend API Service"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.vendor="Foohut"
+LABEL org.opencontainers.image.source="https://github.com/foohut/foohut"
+
+# Set environment
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV VERSION=${VERSION}
+
+# Copy production dependencies
+COPY --from=builder --chown=appuser:nodejs /app/node_modules ./node_modules
+
+# Copy built application
+COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
+COPY --from=builder --chown=appuser:nodejs /app/package.json ./
+
+# Create logs directory
+RUN mkdir -p /app/logs && chown appuser:nodejs /app/logs
+
+# Use non-root user
+USER appuser
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["node", "dist/index.js"]

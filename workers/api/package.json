@@ -1,0 +1,32 @@
+{
+  "name": "foohut-api",
+  "version": "1.0.0",
+  "description": "foohut API - Cloudflare Workers backend with AI capabilities",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "ai",
+    "rag"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20251231.0",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.11.3",
+    "jose": "^5.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^1.2.0",
+    "wrangler": "^3.24.0"
+  }
+}

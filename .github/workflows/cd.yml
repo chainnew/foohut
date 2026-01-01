@@ -1,0 +1,443 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  # Build and push Docker images
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      backend-image: ${{ steps.meta-backend.outputs.tags }}
+      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="sha-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (backend)
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Extract metadata (frontend)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.version.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  # Deploy to staging (on push to main)
+  deploy-staging:
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.foohut.com
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ vars.EKS_CLUSTER_STAGING }} --region ${{ vars.AWS_REGION }}
+
+      - name: Run database migrations
+        run: |
+          kubectl run migration-${{ github.run_id }} \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build-and-push.outputs.version }} \
+            --rm --restart=Never --wait \
+            --env="DATABASE_URL=${{ secrets.DATABASE_URL_STAGING }}" \
+            --command -- npm run db:migrate
+        timeout-minutes: 10
+
+      - name: Deploy to staging
+        run: |
+          # Update image tags in deployment
+          kubectl set image deployment/foohut-backend \
+            backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build-and-push.outputs.version }} \
+            -n foohut-staging
+
+          kubectl set image deployment/foohut-frontend \
+            frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ needs.build-and-push.outputs.version }} \
+            -n foohut-staging
+
+          # Wait for rollout
+          kubectl rollout status deployment/foohut-backend -n foohut-staging --timeout=300s
+          kubectl rollout status deployment/foohut-frontend -n foohut-staging --timeout=300s
+
+      - name: Run health checks
+        run: |
+          # Wait for services to be ready
+          sleep 30
+
+          # Backend health check
+          BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.staging.foohut.com/health)
+          if [ "$BACKEND_STATUS" != "200" ]; then
+            echo "Backend health check failed with status: $BACKEND_STATUS"
+            exit 1
+          fi
+          echo "Backend health check passed"
+
+          # Frontend health check
+          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://staging.foohut.com)
+          if [ "$FRONTEND_STATUS" != "200" ]; then
+            echo "Frontend health check failed with status: $FRONTEND_STATUS"
+            exit 1
+          fi
+          echo "Frontend health check passed"
+
+      - name: Run smoke tests
+        run: |
+          # Run basic API smoke tests
+          curl -f https://api.staging.foohut.com/api/v1/status || exit 1
+          echo "Smoke tests passed"
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "Staging deployment failed for ${{ github.repository }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Staging Deployment Failed*\nRepository: ${{ github.repository }}\nCommit: ${{ github.sha }}\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Deploy to production (on release)
+  deploy-production:
+    needs: build-and-push
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://foohut.com
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ vars.EKS_CLUSTER_PRODUCTION }} --region ${{ vars.AWS_REGION }}
+
+      - name: Create backup before deployment
+        run: |
+          # Create database backup
+          kubectl exec -n foohut-production deploy/postgres -- \
+            pg_dump -U ${{ secrets.DB_USER }} foohut > backup-${{ github.run_id }}.sql
+
+          # Upload to S3
+          aws s3 cp backup-${{ github.run_id }}.sql \
+            s3://${{ vars.BACKUP_BUCKET }}/pre-deploy/backup-${{ github.run_id }}.sql
+
+      - name: Run database migrations
+        run: |
+          kubectl run migration-${{ github.run_id }} \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build-and-push.outputs.version }} \
+            --rm --restart=Never --wait \
+            --env="DATABASE_URL=${{ secrets.DATABASE_URL_PRODUCTION }}" \
+            --command -- npm run db:migrate
+        timeout-minutes: 10
+
+      - name: Deploy to production (canary)
+        run: |
+          # Deploy canary (10% traffic)
+          kubectl apply -f k8s/production/canary-deployment.yaml
+
+          kubectl set image deployment/foohut-backend-canary \
+            backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build-and-push.outputs.version }} \
+            -n foohut-production
+
+          kubectl rollout status deployment/foohut-backend-canary -n foohut-production --timeout=300s
+
+      - name: Verify canary deployment
+        run: |
+          # Wait for canary to stabilize
+          sleep 60
+
+          # Check error rate
+          ERROR_RATE=$(kubectl exec -n monitoring deploy/prometheus -- \
+            promql 'sum(rate(http_requests_total{status=~"5..",deployment="canary"}[5m])) / sum(rate(http_requests_total{deployment="canary"}[5m])) * 100' | tail -1)
+
+          if (( $(echo "$ERROR_RATE > 1" | bc -l) )); then
+            echo "Canary error rate too high: $ERROR_RATE%"
+            exit 1
+          fi
+          echo "Canary verification passed. Error rate: $ERROR_RATE%"
+
+      - name: Promote to full production
+        run: |
+          # Update main deployment
+          kubectl set image deployment/foohut-backend \
+            backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build-and-push.outputs.version }} \
+            -n foohut-production
+
+          kubectl set image deployment/foohut-frontend \
+            frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ needs.build-and-push.outputs.version }} \
+            -n foohut-production
+
+          # Wait for rollout
+          kubectl rollout status deployment/foohut-backend -n foohut-production --timeout=600s
+          kubectl rollout status deployment/foohut-frontend -n foohut-production --timeout=600s
+
+          # Scale down canary
+          kubectl scale deployment/foohut-backend-canary --replicas=0 -n foohut-production
+
+      - name: Run production health checks
+        run: |
+          # Wait for services to be ready
+          sleep 30
+
+          # Backend health check
+          for i in {1..5}; do
+            BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.foohut.com/health)
+            if [ "$BACKEND_STATUS" == "200" ]; then
+              echo "Backend health check passed"
+              break
+            fi
+            if [ $i -eq 5 ]; then
+              echo "Backend health check failed after 5 attempts"
+              exit 1
+            fi
+            sleep 10
+          done
+
+          # Frontend health check
+          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://foohut.com)
+          if [ "$FRONTEND_STATUS" != "200" ]; then
+            echo "Frontend health check failed with status: $FRONTEND_STATUS"
+            exit 1
+          fi
+          echo "Frontend health check passed"
+
+      - name: Create release notes
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ## Deployment Details
+            - **Version**: ${{ needs.build-and-push.outputs.version }}
+            - **Backend Image**: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build-and-push.outputs.version }}
+            - **Frontend Image**: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ needs.build-and-push.outputs.version }}
+            - **Deployed at**: ${{ github.event.head_commit.timestamp }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify on success
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "Production deployment successful for ${{ github.repository }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Production Deployment Successful*\nVersion: ${{ needs.build-and-push.outputs.version }}\nRelease: ${{ github.event.release.html_url }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "Production deployment failed for ${{ github.repository }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Production Deployment Failed*\nVersion: ${{ needs.build-and-push.outputs.version }}\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Rollback job (manual trigger)
+  rollback:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ vars.EKS_CLUSTER_PRODUCTION }} --region ${{ vars.AWS_REGION }}
+
+      - name: Rollback deployment
+        run: |
+          kubectl rollout undo deployment/foohut-backend -n foohut-production
+          kubectl rollout undo deployment/foohut-frontend -n foohut-production
+
+          kubectl rollout status deployment/foohut-backend -n foohut-production --timeout=300s
+          kubectl rollout status deployment/foohut-frontend -n foohut-production --timeout=300s
+
+      - name: Verify rollback
+        run: |
+          # Health check after rollback
+          sleep 30
+          curl -f https://api.foohut.com/health || exit 1
+          curl -f https://foohut.com || exit 1
+          echo "Rollback verified successfully"
+
+      - name: Notify rollback
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "Production rollback executed for ${{ github.repository }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Production Rollback Executed*\nTriggered by: ${{ github.actor }}\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

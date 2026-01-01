@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.output/
+.wrangler/
+
+# Environment & secrets
+.env
+.env.*
+.dev.vars
+*.local
+wrangler.toml.bak
+
+# API keys & tokens (be paranoid)
+*secret*
+*token*
+*.pem
+*.key
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+
+# Cloudflare
+.mf/

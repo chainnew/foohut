@@ -1,0 +1,3358 @@
+openapi: 3.1.0
+info:
+  title: Foohut Documentation Platform API
+  version: 1.0.0
+  description: |
+    AI-native documentation platform API with hierarchical content organization,
+    block-based editing, Git synchronization, and AI-powered features.
+
+    ## Architecture
+    - **Organization** > **Collection** > **Space** > **Page** > **Block**
+    - JWT-based authentication with role-based access control
+    - Cursor-based pagination for list endpoints
+    - Rate limiting with standard headers
+
+    ## Authentication
+    All endpoints (except auth) require a valid JWT Bearer token.
+    Include the token in the Authorization header: `Bearer <token>`
+  contact:
+    name: Foohut API Support
+    email: api@foohut.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.foohut.com/v1
+    description: Production server
+  - url: https://staging-api.foohut.com/v1
+    description: Staging server
+  - url: http://localhost:3000/v1
+    description: Local development
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Users
+    description: User profile and account management
+  - name: Organizations
+    description: Organization management and membership
+  - name: Collections
+    description: Collection management within organizations
+  - name: Spaces
+    description: Space management within collections
+  - name: Pages
+    description: Page management within spaces
+  - name: Blocks
+    description: Block-based content editing
+  - name: Change Requests
+    description: Collaborative editing workflow
+  - name: AI Features
+    description: AI-powered search, generation, and suggestions
+  - name: Git Sync
+    description: Git repository synchronization
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ============================================================================
+  # AUTHENTICATION
+  # ============================================================================
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account with email and password
+      operationId: registerUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: user@example.com
+              password: SecureP@ssw0rd!
+              name: John Doe
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: CONFLICT
+                  message: Email already registered
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user
+      description: Login with email and password to obtain JWT tokens
+      operationId: loginUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: user@example.com
+              password: SecureP@ssw0rd!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: UNAUTHORIZED
+                  message: Invalid email or password
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Invalidate the current session and refresh token
+      operationId: logoutUser
+      responses:
+        '204':
+          description: Logout successful
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access token
+      description: Obtain a new access token using a valid refresh token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  description: Valid refresh token
+            example:
+              refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ============================================================================
+  # USERS
+  # ============================================================================
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user profile
+      description: Retrieve the authenticated user's profile information
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags:
+        - Users
+      summary: Update current user profile
+      description: Update the authenticated user's profile information
+      operationId: updateCurrentUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              name: John Updated
+              avatarUrl: https://example.com/avatar.png
+      responses:
+        '200':
+          description: User profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/{userId}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      description: Retrieve a user's public profile information
+      operationId: getUserById
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPublic'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # ORGANIZATIONS
+  # ============================================================================
+  /organizations:
+    get:
+      tags:
+        - Organizations
+      summary: List organizations
+      description: List all organizations the authenticated user has access to
+      operationId: listOrganizations
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Organizations retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Organizations
+      summary: Create organization
+      description: Create a new organization
+      operationId: createOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+            example:
+              name: Acme Corp
+              slug: acme-corp
+              description: Documentation for Acme Corporation
+      responses:
+        '201':
+          description: Organization created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Organization slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /organizations/{orgId}:
+    get:
+      tags:
+        - Organizations
+      summary: Get organization
+      description: Retrieve organization details by ID
+      operationId: getOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Organization retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Organizations
+      summary: Update organization
+      description: Update organization details
+      operationId: updateOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Organizations
+      summary: Delete organization
+      description: Permanently delete an organization and all its content
+      operationId: deleteOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '204':
+          description: Organization deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/members:
+    get:
+      tags:
+        - Organizations
+      summary: List organization members
+      description: List all members of an organization
+      operationId: listOrganizationMembers
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: role
+          in: query
+          description: Filter by role
+          schema:
+            $ref: '#/components/schemas/OrganizationRole'
+      responses:
+        '200':
+          description: Members retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Organizations
+      summary: Add organization member
+      description: Invite a user to join the organization
+      operationId: addOrganizationMember
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+            example:
+              email: newmember@example.com
+              role: editor
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: User is already a member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /organizations/{orgId}/members/{userId}:
+    patch:
+      tags:
+        - Organizations
+      summary: Update member role
+      description: Update a member's role in the organization
+      operationId: updateOrganizationMember
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  $ref: '#/components/schemas/OrganizationRole'
+      responses:
+        '200':
+          description: Member role updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Organizations
+      summary: Remove organization member
+      description: Remove a member from the organization
+      operationId: removeOrganizationMember
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204':
+          description: Member removed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/settings:
+    get:
+      tags:
+        - Organizations
+      summary: Get organization settings
+      description: Retrieve organization configuration settings
+      operationId: getOrganizationSettings
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Organizations
+      summary: Update organization settings
+      description: Update organization configuration settings
+      operationId: updateOrganizationSettings
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # COLLECTIONS
+  # ============================================================================
+  /organizations/{orgId}/collections:
+    get:
+      tags:
+        - Collections
+      summary: List collections
+      description: List all collections in an organization
+      operationId: listCollections
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Collections retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Collections
+      summary: Create collection
+      description: Create a new collection in an organization
+      operationId: createCollection
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCollectionRequest'
+            example:
+              name: Product Documentation
+              slug: product-docs
+              description: Technical documentation for our product suite
+              visibility: public
+      responses:
+        '201':
+          description: Collection created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Collection slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /collections/{collectionId}:
+    get:
+      tags:
+        - Collections
+      summary: Get collection
+      description: Retrieve collection details by ID
+      operationId: getCollection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: Collection retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Collections
+      summary: Update collection
+      description: Update collection details
+      operationId: updateCollection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCollectionRequest'
+      responses:
+        '200':
+          description: Collection updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Collections
+      summary: Delete collection
+      description: Permanently delete a collection and all its spaces
+      operationId: deleteCollection
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '204':
+          description: Collection deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # SPACES
+  # ============================================================================
+  /collections/{collectionId}/spaces:
+    get:
+      tags:
+        - Spaces
+      summary: List spaces
+      description: List all spaces in a collection
+      operationId: listSpaces
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Spaces retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Spaces
+      summary: Create space
+      description: Create a new space in a collection
+      operationId: createSpace
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSpaceRequest'
+            example:
+              name: API Reference
+              slug: api-reference
+              description: Complete API documentation
+              visibility: public
+      responses:
+        '201':
+          description: Space created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Space'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Space slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /spaces/{spaceId}:
+    get:
+      tags:
+        - Spaces
+      summary: Get space
+      description: Retrieve space details by ID
+      operationId: getSpace
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      responses:
+        '200':
+          description: Space retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Space'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Spaces
+      summary: Update space
+      description: Update space details
+      operationId: updateSpace
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSpaceRequest'
+      responses:
+        '200':
+          description: Space updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Space'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Spaces
+      summary: Delete space
+      description: Permanently delete a space and all its pages
+      operationId: deleteSpace
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      responses:
+        '204':
+          description: Space deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /spaces/{spaceId}/git-config:
+    get:
+      tags:
+        - Spaces
+        - Git Sync
+      summary: Get Git configuration
+      description: Retrieve Git synchronization configuration for a space
+      operationId: getSpaceGitConfig
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      responses:
+        '200':
+          description: Git configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Spaces
+        - Git Sync
+      summary: Update Git configuration
+      description: Update Git synchronization configuration for a space
+      operationId: updateSpaceGitConfig
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGitConfigRequest'
+            example:
+              repositoryUrl: https://github.com/acme/docs
+              branch: main
+              syncEnabled: true
+              syncDirection: bidirectional
+      responses:
+        '200':
+          description: Git configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitConfig'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /spaces/{spaceId}/sync:
+    post:
+      tags:
+        - Spaces
+        - Git Sync
+      summary: Trigger Git sync
+      description: Manually trigger Git synchronization for a space
+      operationId: triggerSpaceSync
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                direction:
+                  type: string
+                  enum: [push, pull]
+                  description: Sync direction
+                  default: pull
+                force:
+                  type: boolean
+                  description: Force sync even if conflicts exist
+                  default: false
+      responses:
+        '202':
+          description: Sync initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Sync already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================================================
+  # PAGES
+  # ============================================================================
+  /spaces/{spaceId}/pages:
+    get:
+      tags:
+        - Pages
+      summary: List pages
+      description: List all pages in a space (hierarchical tree structure)
+      operationId: listPages
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: parentId
+          in: query
+          description: Filter by parent page ID (null for root pages)
+          schema:
+            type: string
+            format: uuid
+            nullable: true
+        - name: includeContent
+          in: query
+          description: Include page content in response
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Pages retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Pages
+      summary: Create page
+      description: Create a new page in a space
+      operationId: createPage
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePageRequest'
+            example:
+              title: Getting Started
+              slug: getting-started
+              parentId: null
+              content:
+                blocks:
+                  - type: heading
+                    level: 1
+                    content: Getting Started
+                  - type: paragraph
+                    content: Welcome to our documentation!
+      responses:
+        '201':
+          description: Page created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Page slug already exists in this space
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pages/{pageId}:
+    get:
+      tags:
+        - Pages
+      summary: Get page
+      description: Retrieve page details by ID
+      operationId: getPage
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - name: version
+          in: query
+          description: Specific version number to retrieve
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Page retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Pages
+      summary: Update page
+      description: Update page metadata (title, slug, parent)
+      operationId: updatePage
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePageRequest'
+      responses:
+        '200':
+          description: Page updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Pages
+      summary: Delete page
+      description: Permanently delete a page (moves children to parent)
+      operationId: deletePage
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - name: deleteChildren
+          in: query
+          description: Also delete all child pages
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Page deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pages/{pageId}/content:
+    get:
+      tags:
+        - Pages
+        - Blocks
+      summary: Get page content
+      description: Retrieve the block-based content of a page
+      operationId: getPageContent
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - name: version
+          in: query
+          description: Specific version number to retrieve
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Page content retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageContent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Pages
+        - Blocks
+      summary: Update page content
+      description: Update the entire block content of a page
+      operationId: updatePageContent
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePageContentRequest'
+      responses:
+        '200':
+          description: Page content updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageContent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Content version conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /pages/{pageId}/versions:
+    get:
+      tags:
+        - Pages
+      summary: List page versions
+      description: Retrieve version history of a page
+      operationId: listPageVersions
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page versions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageVersionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pages/{pageId}/publish:
+    post:
+      tags:
+        - Pages
+      summary: Publish page
+      description: Publish a draft page or update publication status
+      operationId: publishPage
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visibility:
+                  type: string
+                  enum: [public, private, unlisted]
+                  default: public
+                scheduledAt:
+                  type: string
+                  format: date-time
+                  description: Schedule publication for a future time
+      responses:
+        '200':
+          description: Page published successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # BLOCKS
+  # ============================================================================
+  /pages/{pageId}/blocks:
+    get:
+      tags:
+        - Blocks
+      summary: Get page blocks
+      description: Retrieve all blocks from a page
+      operationId: getPageBlocks
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      responses:
+        '200':
+          description: Blocks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Block'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Blocks
+      summary: Update page blocks
+      description: Batch update multiple blocks in a page
+      operationId: updatePageBlocks
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - operations
+              properties:
+                operations:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/BlockOperation'
+                baseVersion:
+                  type: integer
+                  description: Base version for conflict detection
+      responses:
+        '200':
+          description: Blocks updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Block'
+                  version:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Version conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Blocks
+      summary: Add block to page
+      description: Add a new block to a page at a specific position
+      operationId: addBlock
+      parameters:
+        - $ref: '#/components/parameters/PageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddBlockRequest'
+            example:
+              type: paragraph
+              content: This is a new paragraph block.
+              afterBlockId: block-uuid-123
+      responses:
+        '201':
+          description: Block added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /blocks/{blockId}:
+    get:
+      tags:
+        - Blocks
+      summary: Get block
+      description: Retrieve a specific block by ID
+      operationId: getBlock
+      parameters:
+        - $ref: '#/components/parameters/BlockId'
+      responses:
+        '200':
+          description: Block retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Blocks
+      summary: Update block
+      description: Update a specific block's content or properties
+      operationId: updateBlock
+      parameters:
+        - $ref: '#/components/parameters/BlockId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBlockRequest'
+      responses:
+        '200':
+          description: Block updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Blocks
+      summary: Delete block
+      description: Delete a specific block from a page
+      operationId: deleteBlock
+      parameters:
+        - $ref: '#/components/parameters/BlockId'
+      responses:
+        '204':
+          description: Block deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # CHANGE REQUESTS
+  # ============================================================================
+  /spaces/{spaceId}/change-requests:
+    get:
+      tags:
+        - Change Requests
+      summary: List change requests
+      description: List all change requests for a space
+      operationId: listChangeRequests
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [open, merged, closed]
+        - name: authorId
+          in: query
+          description: Filter by author
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Change requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Change Requests
+      summary: Create change request
+      description: Create a new change request for collaborative editing
+      operationId: createChangeRequest
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChangeRequestRequest'
+            example:
+              title: Update getting started guide
+              description: Added new section on authentication
+              sourceBranch: feature/auth-docs
+              targetBranch: main
+              pages:
+                - pageId: page-uuid-123
+                  changes:
+                    - type: update
+                      blockId: block-uuid-456
+                      content: Updated content
+      responses:
+        '201':
+          description: Change request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /change-requests/{changeRequestId}:
+    get:
+      tags:
+        - Change Requests
+      summary: Get change request
+      description: Retrieve change request details by ID
+      operationId: getChangeRequest
+      parameters:
+        - $ref: '#/components/parameters/ChangeRequestId'
+      responses:
+        '200':
+          description: Change request retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Change Requests
+      summary: Update change request
+      description: Update change request details
+      operationId: updateChangeRequest
+      parameters:
+        - $ref: '#/components/parameters/ChangeRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChangeRequestRequest'
+      responses:
+        '200':
+          description: Change request updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Change Requests
+      summary: Close change request
+      description: Close a change request without merging
+      operationId: closeChangeRequest
+      parameters:
+        - $ref: '#/components/parameters/ChangeRequestId'
+      responses:
+        '204':
+          description: Change request closed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /change-requests/{changeRequestId}/merge:
+    post:
+      tags:
+        - Change Requests
+      summary: Merge change request
+      description: Merge an approved change request into the target branch
+      operationId: mergeChangeRequest
+      parameters:
+        - $ref: '#/components/parameters/ChangeRequestId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                strategy:
+                  type: string
+                  enum: [merge, squash, rebase]
+                  default: merge
+                deleteSourceBranch:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Change request merged successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Merge conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeConflictError'
+
+  # ============================================================================
+  # AI FEATURES
+  # ============================================================================
+  /ai/search:
+    post:
+      tags:
+        - AI Features
+      summary: Semantic search
+      description: Perform AI-powered semantic search across documentation
+      operationId: aiSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISearchRequest'
+            example:
+              query: How do I authenticate with the API?
+              scope:
+                organizationId: org-uuid-123
+                collectionIds: [collection-uuid-456]
+              filters:
+                contentTypes: [page, block]
+                updatedAfter: '2024-01-01T00:00:00Z'
+              limit: 10
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /ai/generate:
+    post:
+      tags:
+        - AI Features
+      summary: Generate content
+      description: Generate documentation content using AI
+      operationId: aiGenerate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIGenerateRequest'
+            example:
+              prompt: Write a getting started guide for our REST API
+              context:
+                spaceId: space-uuid-123
+                existingContent: true
+              options:
+                tone: professional
+                length: medium
+                format: markdown
+      responses:
+        '200':
+          description: Content generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIGenerateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /ai/suggest:
+    post:
+      tags:
+        - AI Features
+      summary: Get suggestions
+      description: Get AI-powered suggestions for improving content
+      operationId: aiSuggest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISuggestRequest'
+            example:
+              pageId: page-uuid-123
+              suggestionTypes:
+                - grammar
+                - clarity
+                - completeness
+                - seo
+      responses:
+        '200':
+          description: Suggestions generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISuggestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ============================================================================
+  # GIT SYNC
+  # ============================================================================
+  /webhooks/github:
+    post:
+      tags:
+        - Git Sync
+      summary: GitHub webhook
+      description: Receive GitHub webhook events for repository synchronization
+      operationId: githubWebhook
+      security: []
+      parameters:
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema:
+            type: string
+          description: GitHub event type
+        - name: X-GitHub-Delivery
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Unique delivery ID
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema:
+            type: string
+          description: HMAC signature for verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: GitHub webhook payload (varies by event type)
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: processed
+                  syncTriggered:
+                    type: boolean
+        '400':
+          description: Invalid webhook payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /spaces/{spaceId}/git/status:
+    get:
+      tags:
+        - Git Sync
+      summary: Get Git sync status
+      description: Get the current Git synchronization status for a space
+      operationId: getGitStatus
+      parameters:
+        - $ref: '#/components/parameters/SpaceId'
+      responses:
+        '200':
+          description: Git status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ==============================================================================
+# COMPONENTS
+# ==============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from /auth/login
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: User unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      description: Organization unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    CollectionId:
+      name: collectionId
+      in: path
+      required: true
+      description: Collection unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    SpaceId:
+      name: spaceId
+      in: path
+      required: true
+      description: Space unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    PageId:
+      name: pageId
+      in: path
+      required: true
+      description: Page unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    BlockId:
+      name: blockId
+      in: path
+      required: true
+      description: Block unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    ChangeRequestId:
+      name: changeRequestId
+      in: path
+      required: true
+      description: Change request unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    Cursor:
+      name: cursor
+      in: query
+      description: Pagination cursor for next page
+      schema:
+        type: string
+
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of items to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: BAD_REQUEST
+              message: Validation failed
+              details:
+                - field: email
+                  message: Invalid email format
+
+    Unauthorized:
+      description: Unauthorized - invalid or missing authentication
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          example: Bearer realm="api"
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: Invalid or expired token
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: FORBIDDEN
+              message: You do not have permission to perform this action
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: Resource not found
+
+    RateLimited:
+      description: Too many requests - rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per time window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when the rate limit resets
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: RATE_LIMITED
+              message: Rate limit exceeded. Please retry after 60 seconds.
+
+  schemas:
+    # --------------------------------------------------------------------------
+    # ERROR SCHEMAS
+    # --------------------------------------------------------------------------
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code for programmatic handling
+              enum:
+                - BAD_REQUEST
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - NOT_FOUND
+                - CONFLICT
+                - RATE_LIMITED
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: array
+              description: Additional error details
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+            requestId:
+              type: string
+              description: Request ID for support reference
+
+    MergeConflictError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            error:
+              type: object
+              properties:
+                conflicts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      pageId:
+                        type: string
+                        format: uuid
+                      blockId:
+                        type: string
+                        format: uuid
+                      sourceContent:
+                        type: string
+                      targetContent:
+                        type: string
+
+    # --------------------------------------------------------------------------
+    # PAGINATION
+    # --------------------------------------------------------------------------
+    PaginationMeta:
+      type: object
+      properties:
+        cursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page (null if no more pages)
+        hasMore:
+          type: boolean
+          description: Whether more items exist
+        total:
+          type: integer
+          description: Total count of items (when available)
+
+    # --------------------------------------------------------------------------
+    # AUTH SCHEMAS
+    # --------------------------------------------------------------------------
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: Must contain uppercase, lowercase, number, and special character
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (expires in 15 minutes)
+        refreshToken:
+          type: string
+          description: Refresh token (expires in 7 days)
+        expiresIn:
+          type: integer
+          description: Access token expiration time in seconds
+        tokenType:
+          type: string
+          default: Bearer
+        user:
+          $ref: '#/components/schemas/User'
+
+    # --------------------------------------------------------------------------
+    # USER SCHEMAS
+    # --------------------------------------------------------------------------
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        emailVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserPublic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    # --------------------------------------------------------------------------
+    # ORGANIZATION SCHEMAS
+    # --------------------------------------------------------------------------
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+        description:
+          type: string
+          nullable: true
+        logoUrl:
+          type: string
+          format: uri
+          nullable: true
+        ownerId:
+          type: string
+          format: uuid
+        plan:
+          type: string
+          enum: [free, pro, enterprise]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrganizationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CreateOrganizationRequest:
+      type: object
+      required:
+        - name
+        - slug
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          minLength: 3
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 500
+
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        logoUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    OrganizationRole:
+      type: string
+      enum: [owner, admin, editor, viewer]
+
+    Member:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        user:
+          $ref: '#/components/schemas/UserPublic'
+        role:
+          $ref: '#/components/schemas/OrganizationRole'
+        joinedAt:
+          type: string
+          format: date-time
+
+    MemberList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    AddMemberRequest:
+      type: object
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/OrganizationRole'
+
+    OrganizationSettings:
+      type: object
+      properties:
+        allowPublicSpaces:
+          type: boolean
+          default: true
+        defaultVisibility:
+          type: string
+          enum: [public, private]
+          default: private
+        requireApprovalForPublish:
+          type: boolean
+          default: false
+        aiFeatures:
+          type: object
+          properties:
+            searchEnabled:
+              type: boolean
+              default: true
+            generateEnabled:
+              type: boolean
+              default: true
+            suggestEnabled:
+              type: boolean
+              default: true
+        branding:
+          type: object
+          properties:
+            primaryColor:
+              type: string
+              pattern: ^#[0-9A-Fa-f]{6}$
+            customDomain:
+              type: string
+              nullable: true
+            customLogo:
+              type: string
+              format: uri
+              nullable: true
+
+    UpdateOrganizationSettingsRequest:
+      type: object
+      properties:
+        allowPublicSpaces:
+          type: boolean
+        defaultVisibility:
+          type: string
+          enum: [public, private]
+        requireApprovalForPublish:
+          type: boolean
+        aiFeatures:
+          type: object
+          properties:
+            searchEnabled:
+              type: boolean
+            generateEnabled:
+              type: boolean
+            suggestEnabled:
+              type: boolean
+        branding:
+          type: object
+          properties:
+            primaryColor:
+              type: string
+              pattern: ^#[0-9A-Fa-f]{6}$
+            customDomain:
+              type: string
+              nullable: true
+            customLogo:
+              type: string
+              format: uri
+              nullable: true
+
+    # --------------------------------------------------------------------------
+    # COLLECTION SCHEMAS
+    # --------------------------------------------------------------------------
+    Collection:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+        description:
+          type: string
+          nullable: true
+        visibility:
+          type: string
+          enum: [public, private]
+        coverImageUrl:
+          type: string
+          format: uri
+          nullable: true
+        spacesCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CollectionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CreateCollectionRequest:
+      type: object
+      required:
+        - name
+        - slug
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          minLength: 3
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 500
+        visibility:
+          type: string
+          enum: [public, private]
+          default: private
+
+    UpdateCollectionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        visibility:
+          type: string
+          enum: [public, private]
+        coverImageUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    # --------------------------------------------------------------------------
+    # SPACE SCHEMAS
+    # --------------------------------------------------------------------------
+    Space:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        collectionId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+        description:
+          type: string
+          nullable: true
+        visibility:
+          type: string
+          enum: [public, private, unlisted]
+        emoji:
+          type: string
+          nullable: true
+        pagesCount:
+          type: integer
+        gitSyncEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SpaceList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Space'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CreateSpaceRequest:
+      type: object
+      required:
+        - name
+        - slug
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          minLength: 3
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 500
+        visibility:
+          type: string
+          enum: [public, private, unlisted]
+          default: private
+        emoji:
+          type: string
+          maxLength: 10
+
+    UpdateSpaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        visibility:
+          type: string
+          enum: [public, private, unlisted]
+        emoji:
+          type: string
+          maxLength: 10
+          nullable: true
+
+    GitConfig:
+      type: object
+      properties:
+        repositoryUrl:
+          type: string
+          format: uri
+          nullable: true
+        branch:
+          type: string
+          default: main
+        syncEnabled:
+          type: boolean
+          default: false
+        syncDirection:
+          type: string
+          enum: [push, pull, bidirectional]
+          default: bidirectional
+        basePath:
+          type: string
+          description: Path within repository for docs
+          default: /
+        fileFormat:
+          type: string
+          enum: [markdown, mdx]
+          default: markdown
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSyncStatus:
+          type: string
+          enum: [success, failed, in_progress]
+          nullable: true
+
+    UpdateGitConfigRequest:
+      type: object
+      properties:
+        repositoryUrl:
+          type: string
+          format: uri
+          nullable: true
+        branch:
+          type: string
+        syncEnabled:
+          type: boolean
+        syncDirection:
+          type: string
+          enum: [push, pull, bidirectional]
+        basePath:
+          type: string
+        fileFormat:
+          type: string
+          enum: [markdown, mdx]
+        accessToken:
+          type: string
+          writeOnly: true
+          description: Git access token (stored encrypted)
+
+    SyncStatus:
+      type: object
+      properties:
+        syncId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+        direction:
+          type: string
+          enum: [push, pull]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        changesCount:
+          type: integer
+        error:
+          type: string
+          nullable: true
+
+    GitStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        repositoryUrl:
+          type: string
+          format: uri
+          nullable: true
+        branch:
+          type: string
+        lastCommit:
+          type: object
+          nullable: true
+          properties:
+            sha:
+              type: string
+            message:
+              type: string
+            author:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+        pendingChanges:
+          type: integer
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+        syncStatus:
+          type: string
+          enum: [idle, syncing, error]
+
+    # --------------------------------------------------------------------------
+    # PAGE SCHEMAS
+    # --------------------------------------------------------------------------
+    Page:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+        description:
+          type: string
+          nullable: true
+        emoji:
+          type: string
+          nullable: true
+        path:
+          type: string
+          description: Full path from root (e.g., /guides/getting-started)
+        status:
+          type: string
+          enum: [draft, published, archived]
+        visibility:
+          type: string
+          enum: [public, private, unlisted]
+        version:
+          type: integer
+        publishedVersion:
+          type: integer
+          nullable: true
+        authorId:
+          type: string
+          format: uuid
+        lastEditorId:
+          type: string
+          format: uuid
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        content:
+          $ref: '#/components/schemas/PageContent'
+
+    PageList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CreatePageRequest:
+      type: object
+      required:
+        - title
+        - slug
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        emoji:
+          type: string
+          maxLength: 10
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        content:
+          $ref: '#/components/schemas/PageContent'
+
+    UpdatePageRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        emoji:
+          type: string
+          maxLength: 10
+          nullable: true
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+
+    PageContent:
+      type: object
+      properties:
+        version:
+          type: integer
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+
+    UpdatePageContentRequest:
+      type: object
+      required:
+        - blocks
+      properties:
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+        baseVersion:
+          type: integer
+          description: Version to base changes on (for conflict detection)
+
+    PageVersion:
+      type: object
+      properties:
+        version:
+          type: integer
+        authorId:
+          type: string
+          format: uuid
+        author:
+          $ref: '#/components/schemas/UserPublic'
+        message:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        blocksChanged:
+          type: integer
+
+    PageVersionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageVersion'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # --------------------------------------------------------------------------
+    # BLOCK SCHEMAS
+    # --------------------------------------------------------------------------
+    Block:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/BlockType'
+        content:
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+          description: Block content (structure varies by type)
+        properties:
+          type: object
+          additionalProperties: true
+          description: Block-specific properties
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+          description: Nested blocks (for list items, toggles, etc.)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    BlockType:
+      type: string
+      enum:
+        - paragraph
+        - heading
+        - code
+        - quote
+        - callout
+        - list
+        - listItem
+        - todo
+        - table
+        - tableRow
+        - tableCell
+        - image
+        - video
+        - embed
+        - file
+        - divider
+        - toggleList
+        - tabs
+        - tab
+        - hint
+        - api
+        - swagger
+        - openapi
+        - math
+        - mermaid
+
+    AddBlockRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          $ref: '#/components/schemas/BlockType'
+        content:
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+        properties:
+          type: object
+          additionalProperties: true
+        afterBlockId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Insert after this block (null for start)
+        parentBlockId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Parent block for nesting
+
+    UpdateBlockRequest:
+      type: object
+      properties:
+        content:
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+        properties:
+          type: object
+          additionalProperties: true
+
+    BlockOperation:
+      type: object
+      required:
+        - operation
+      properties:
+        operation:
+          type: string
+          enum: [insert, update, delete, move]
+        blockId:
+          type: string
+          format: uuid
+        block:
+          $ref: '#/components/schemas/Block'
+        afterBlockId:
+          type: string
+          format: uuid
+          nullable: true
+        parentBlockId:
+          type: string
+          format: uuid
+          nullable: true
+
+    # --------------------------------------------------------------------------
+    # CHANGE REQUEST SCHEMAS
+    # --------------------------------------------------------------------------
+    ChangeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        spaceId:
+          type: string
+          format: uuid
+        number:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [open, merged, closed]
+        authorId:
+          type: string
+          format: uuid
+        author:
+          $ref: '#/components/schemas/UserPublic'
+        sourceBranch:
+          type: string
+        targetBranch:
+          type: string
+        reviewers:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+                format: uuid
+              user:
+                $ref: '#/components/schemas/UserPublic'
+              status:
+                type: string
+                enum: [pending, approved, changes_requested]
+              reviewedAt:
+                type: string
+                format: date-time
+                nullable: true
+        changesCount:
+          type: integer
+        commentsCount:
+          type: integer
+        mergedAt:
+          type: string
+          format: date-time
+          nullable: true
+        mergedById:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ChangeRequestList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChangeRequest'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CreateChangeRequestRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        sourceBranch:
+          type: string
+        targetBranch:
+          type: string
+          default: main
+        reviewerIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        pages:
+          type: array
+          items:
+            type: object
+            properties:
+              pageId:
+                type: string
+                format: uuid
+              changes:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum: [create, update, delete]
+                    blockId:
+                      type: string
+                      format: uuid
+                    content:
+                      type: object
+
+    UpdateChangeRequestRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        reviewerIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    # --------------------------------------------------------------------------
+    # AI FEATURE SCHEMAS
+    # --------------------------------------------------------------------------
+    AISearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 500
+        scope:
+          type: object
+          properties:
+            organizationId:
+              type: string
+              format: uuid
+            collectionIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            spaceIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+        filters:
+          type: object
+          properties:
+            contentTypes:
+              type: array
+              items:
+                type: string
+                enum: [page, block, heading, code]
+            updatedAfter:
+              type: string
+              format: date-time
+            updatedBefore:
+              type: string
+              format: date-time
+            authorIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        includeSnippets:
+          type: boolean
+          default: true
+
+    AISearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              type:
+                type: string
+                enum: [page, block]
+              pageId:
+                type: string
+                format: uuid
+              spaceId:
+                type: string
+                format: uuid
+              title:
+                type: string
+              path:
+                type: string
+              snippet:
+                type: string
+                description: Highlighted text snippet
+              score:
+                type: number
+                description: Relevance score (0-1)
+              matchedIn:
+                type: array
+                items:
+                  type: string
+                  enum: [title, content, description]
+        query:
+          type: string
+        totalResults:
+          type: integer
+        searchDurationMs:
+          type: integer
+
+    AIGenerateRequest:
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        context:
+          type: object
+          properties:
+            spaceId:
+              type: string
+              format: uuid
+            pageId:
+              type: string
+              format: uuid
+            existingContent:
+              type: boolean
+              description: Include existing page content as context
+        options:
+          type: object
+          properties:
+            tone:
+              type: string
+              enum: [professional, casual, technical, friendly]
+              default: professional
+            length:
+              type: string
+              enum: [short, medium, long]
+              default: medium
+            format:
+              type: string
+              enum: [markdown, blocks, plain]
+              default: markdown
+            language:
+              type: string
+              description: ISO language code
+              default: en
+
+    AIGenerateResponse:
+      type: object
+      properties:
+        content:
+          type: string
+          description: Generated content (markdown or plain text)
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Block'
+          description: Generated content as blocks (when format is blocks)
+        metadata:
+          type: object
+          properties:
+            model:
+              type: string
+            tokensUsed:
+              type: integer
+            generationTimeMs:
+              type: integer
+
+    AISuggestRequest:
+      type: object
+      required:
+        - pageId
+      properties:
+        pageId:
+          type: string
+          format: uuid
+        blockIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Specific blocks to analyze (all if not provided)
+        suggestionTypes:
+          type: array
+          items:
+            type: string
+            enum:
+              - grammar
+              - clarity
+              - completeness
+              - seo
+              - accessibility
+              - tone
+              - structure
+          default: [grammar, clarity]
+
+    AISuggestResponse:
+      type: object
+      properties:
+        suggestions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              type:
+                type: string
+                enum: [grammar, clarity, completeness, seo, accessibility, tone, structure]
+              severity:
+                type: string
+                enum: [info, warning, error]
+              blockId:
+                type: string
+                format: uuid
+                nullable: true
+              originalText:
+                type: string
+              suggestedText:
+                type: string
+              explanation:
+                type: string
+              position:
+                type: object
+                properties:
+                  start:
+                    type: integer
+                  end:
+                    type: integer
+        pageId:
+          type: string
+          format: uuid
+        analysisTimeMs:
+          type: integer
+        overallScore:
+          type: object
+          properties:
+            grammar:
+              type: number
+            clarity:
+              type: number
+            completeness:
+              type: number
+            seo:
+              type: number

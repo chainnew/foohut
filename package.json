@@ -1,0 +1,47 @@
+{
+  "name": "foohut",
+  "version": "0.1.0",
+  "description": "AI-native documentation and knowledge management platform",
+  "private": true,
+  "workspaces": [
+    "src/backend",
+    "src/frontend",
+    "src/shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run dev -w src/backend",
+    "dev:frontend": "npm run dev -w src/frontend",
+    "build": "npm run build -w src/backend && npm run build -w src/frontend",
+    "build:backend": "npm run build -w src/backend",
+    "build:frontend": "npm run build -w src/frontend",
+    "test": "npm run test -w src/backend && npm run test -w src/frontend",
+    "test:backend": "npm run test -w src/backend",
+    "test:frontend": "npm run test -w src/frontend",
+    "lint": "npm run lint -w src/backend && npm run lint -w src/frontend",
+    "typecheck": "npm run typecheck -w src/backend && npm run typecheck -w src/frontend",
+    "db:migrate": "npm run db:migrate -w src/backend",
+    "db:seed": "npm run db:seed -w src/backend",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+name = "foo-fun-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "foo-fun-db"
+database_id = "944a7f32-656f-46d7-a33d-c56ac0fb541e"
+
+# R2 Storage
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "foo-fun-assets"
+
+# Vectorize for RAG embeddings
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "foo-fun-docs"
+
+# Workers AI
+[ai]
+binding = "AI"
+
+[vars]
+ENVIRONMENT = "production"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# Auth0 Configuration
+AUTH0_DOMAIN = "dev-ckhvkxumtkrv5zih.au.auth0.com"
+AUTH0_AUDIENCE = "https://api.foohut.com"
+
+# Local development overrides
+[env.dev]
+vars = { ENVIRONMENT = "development", AUTH0_DOMAIN = "dev-ckhvkxumtkrv5zih.au.auth0.com", AUTH0_AUDIENCE = "https://api.foohut.com" }
+
+routes = [
+  { pattern = "api.foohut.com", custom_domain = true }
+]
