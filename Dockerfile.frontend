@@ -87,7 +87,7 @@ RUN pnpm build
 # ============================================
 # Stage 5: Production image with Nginx
 # ============================================
-FROM nginx:1.25-alpine AS production
+FROM nginx:1.29-alpine AS production
 
 # Build arguments for versioning
 ARG VERSION=unknown
