@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>foohut dev — e-commerce</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        mint: { 400: '#8BE7C4', 500: '#6BB79B', 600: '#5AA082' },
+                        dark: { 950: '#0a0b0f', 900: '#0f1117', 800: '#12141c', 700: '#1a1d27', 600: '#1f222d' }
+                    },
+                    fontFamily: {
+                        grotesk: ['Space Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Inter', '-apple-system', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .kw { color: #a78bfa; }
+        .str { color: #8BE7C4; }
+        .fn { color: #60a5fa; }
+        .cmt { color: #475569; font-style: italic; }
+        .var { color: #fb923c; }
+        .type { color: #fbbf24; }
+        .tag { color: #f472b6; }
+        .attr { color: #fb923c; }
+        .num { color: #4ade80; }
+        .op { color: #94a3b8; }
+        .bracket { color: #64748b; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+        .cursor-blink { animation: blink 1s step-end infinite; }
+        .pulse { animation: pulse 2s infinite; }
+        .typing-dot { animation: bounce 1.4s ease-in-out infinite; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    </style>
+</head>
+<body class="font-sans bg-dark-950 text-slate-100 h-screen overflow-hidden flex flex-col">
+    <!-- Topbar -->
+    <header class="flex items-center justify-between px-4 h-12 bg-dark-900 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-4">
+            <button class="w-8 h-8 rounded-md text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center">&#9776;</button>
+            <div class="flex items-center gap-2">
+                <img src="foohut_logo_pack/foohut-icon-solid.svg" alt="foohut" class="w-7 h-7">
+                <span class="font-grotesk text-lg font-bold"><span class="text-white">foo</span><span class="text-mint-400">hut</span></span>
+            </div>
+        </div>
+        <div class="flex-1 flex justify-center">
+            <div class="flex items-center gap-2 px-4 py-1.5 bg-dark-800 border border-slate-800 rounded-lg w-96 focus-within:border-mint-400 focus-within:ring-2 focus-within:ring-mint-400/25">
+                <span class="text-slate-600 text-sm">&#128269;</span>
+                <input type="text" placeholder="Search files, commands, or ask AI..." class="flex-1 bg-transparent border-none text-sm text-white outline-none placeholder:text-slate-600">
+                <kbd class="font-mono text-[10px] text-slate-600 bg-dark-900 px-1.5 py-0.5 rounded border border-slate-800">&#8984;K</kbd>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button class="flex items-center gap-1.5 px-3 py-1.5 bg-mint-400 rounded-md text-dark-950 text-sm font-semibold hover:bg-mint-500 hover:shadow-lg hover:shadow-mint-400/25 transition-all">+ New</button>
+            <button class="w-8 h-8 rounded-md text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center">&#128276;</button>
+            <button class="w-8 h-8 rounded-md text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center">&#9881;</button>
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-400 to-pink-400 flex items-center justify-center text-xs font-semibold cursor-pointer ml-1">MM</div>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Icon Sidebar -->
+        <nav class="w-12 bg-dark-900 border-r border-slate-800 flex flex-col items-center py-2 shrink-0">
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#127968;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#128202;</button>
+            <button class="w-9 h-9 rounded-lg bg-mint-400/10 text-mint-400 flex items-center justify-center mb-1 text-lg relative before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-0.5 before:h-5 before:bg-mint-400 before:rounded-r">&#128187;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#128256;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#128193;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#128269;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#10024;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#129514;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#129513;</button>
+            <div class="flex-1"></div>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center mb-1 text-lg">&#128276;</button>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-lg">&#9881;</button>
+        </nav>
+
+        <!-- Workspace -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- Toolbar -->
+            <div class="flex items-center px-3 py-1.5 bg-dark-900 border-b border-slate-800 gap-1">
+                <div class="flex items-center gap-0.5 pr-2.5 mr-2.5 border-r border-slate-800">
+                    <button class="w-7 h-7 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-sm">&#128196;</button>
+                    <button class="w-7 h-7 rounded bg-mint-400 text-dark-950 flex items-center justify-center text-sm">&#128187;</button>
+                    <button class="w-7 h-7 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-sm">&#128295;</button>
+                    <button class="w-7 h-7 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-sm">&#9654;</button>
+                    <button class="w-7 h-7 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-sm">&#127760;</button>
+                </div>
+                <div class="flex items-center gap-1.5 px-2.5 py-1 bg-dark-700 rounded font-mono text-xs text-slate-400 cursor-pointer">
+                    <span class="text-violet-400">&#9095;</span>
+                    main
+                    <span class="text-slate-600">&#9660;</span>
+                </div>
+                <div class="flex-1"></div>
+                <div class="flex items-center gap-1.5 text-xs text-slate-500">
+                    <span class="w-1.5 h-1.5 bg-mint-400 rounded-full"></span>
+                    Synced
+                </div>
+            </div>
+
+            <!-- Editor Area -->
+            <div class="flex-1 flex overflow-hidden">
+                <!-- File Explorer -->
+                <aside class="w-60 bg-dark-900 border-r border-slate-800 flex flex-col shrink-0">
+                    <div class="flex items-center justify-between px-3 py-2 border-b border-slate-800">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-600 font-semibold">Explorer</span>
+                        <div class="flex gap-0.5">
+                            <button class="w-5 h-5 rounded text-slate-600 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-xs">+</button>
+                            <button class="w-5 h-5 rounded text-slate-600 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-xs">&#128193;</button>
+                            <button class="w-5 h-5 rounded text-slate-600 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-xs">&#8635;</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto py-1 text-sm">
+                        <!-- File tree items (shortened for brevity, same as no-ai version) -->
+                        <div class="flex items-center gap-1 px-3 py-1 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5 text-[10px] text-slate-600 rotate-90">&#9654;</span><span class="text-yellow-400">&#128194;</span><span>db</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-7 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5 text-[10px] text-slate-600 rotate-90">&#9654;</span><span class="text-yellow-400">&#128194;</span><span>migrations</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-11 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#128196;</span><span>001_init.sql</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-11 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#128196;</span><span>002_users.sql</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-7 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#128196;</span><span>schema.ts</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5 text-[10px] text-slate-600 rotate-90">&#9654;</span><span class="text-yellow-400">&#128194;</span><span>src</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-7 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5 text-[10px] text-slate-600 rotate-90">&#9654;</span><span class="text-yellow-400">&#128194;</span><span>components</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-11 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#9883;</span><span>Header.tsx</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-11 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#9883;</span><span>ProductCard.tsx</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-11 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#9883;</span><span>Cart.tsx</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-7 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5 text-[10px] text-slate-600 rotate-90">&#9654;</span><span class="text-yellow-400">&#128194;</span><span>hooks</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-11 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#128196;</span><span>useAuth.ts</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-11 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#128196;</span><span>useCart.ts</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-7 bg-mint-400/10 text-mint-400 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#9883;</span><span>App.tsx</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-7 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-pink-400">&#127912;</span><span>globals.css</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 pl-7 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-blue-400">&#9883;</span><span>main.tsx</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-green-400">&#128272;</span><span>.env</span></div>
+                        <div class="flex items-center gap-1 px-3 py-1 text-slate-400 hover:bg-dark-600 hover:text-slate-200 cursor-pointer"><span class="w-3.5"></span><span class="text-yellow-400">&#128230;</span><span>package.json</span></div>
+                    </div>
+                </aside>
+
+                <!-- Editor Panel -->
+                <div class="flex-1 flex flex-col bg-dark-950 overflow-hidden min-w-0">
+                    <div class="flex bg-dark-900 border-b border-slate-800 overflow-x-auto">
+                        <div class="flex items-center gap-1.5 px-3 py-2 font-mono text-xs text-white bg-dark-950 border-r border-slate-800 border-b-2 border-b-mint-400 -mb-px cursor-pointer whitespace-nowrap">
+                            <span class="text-blue-400">&#9883;</span>App.tsx<span class="w-1.5 h-1.5 bg-mint-400 rounded-full"></span>
+                        </div>
+                        <div class="flex items-center gap-1.5 px-3 py-2 font-mono text-xs text-slate-500 border-r border-slate-800 hover:bg-dark-600 hover:text-slate-200 cursor-pointer whitespace-nowrap">
+                            <span class="text-blue-400">&#9883;</span>ProductCard.tsx
+                        </div>
+                        <div class="flex items-center gap-1.5 px-3 py-2 font-mono text-xs text-slate-500 border-r border-slate-800 hover:bg-dark-600 hover:text-slate-200 cursor-pointer whitespace-nowrap">
+                            <span class="text-blue-400">&#128196;</span>useCart.ts
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto py-3">
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">1</span><span><span class="kw">import</span> <span class="bracket">{</span> useState<span class="op">,</span> useEffect <span class="bracket">}</span> <span class="kw">from</span> <span class="str">'react'</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">2</span><span><span class="kw">import</span> <span class="bracket">{</span> BrowserRouter<span class="op">,</span> Routes<span class="op">,</span> Route <span class="bracket">}</span> <span class="kw">from</span> <span class="str">'react-router-dom'</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">3</span><span><span class="kw">import</span> <span class="bracket">{</span> Header <span class="bracket">}</span> <span class="kw">from</span> <span class="str">'./components/Header'</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">4</span><span><span class="kw">import</span> <span class="bracket">{</span> ProductCard <span class="bracket">}</span> <span class="kw">from</span> <span class="str">'./components/ProductCard'</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">5</span><span><span class="kw">import</span> <span class="bracket">{</span> useAuth <span class="bracket">}</span> <span class="kw">from</span> <span class="str">'./hooks/useAuth'</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">6</span><span><span class="kw">import</span> <span class="bracket">{</span> useCart <span class="bracket">}</span> <span class="kw">from</span> <span class="str">'./hooks/useCart'</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">7</span><span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">8</span><span><span class="kw">interface</span> <span class="type">Product</span> <span class="bracket">{</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">9</span><span>  <span class="var">id</span><span class="op">:</span> <span class="type">string</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">10</span><span>  <span class="var">name</span><span class="op">:</span> <span class="type">string</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">11</span><span>  <span class="var">price</span><span class="op">:</span> <span class="type">number</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">12</span><span><span class="bracket">}</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">13</span><span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">14</span><span><span class="kw">export default function</span> <span class="fn">App</span><span class="bracket">()</span> <span class="bracket">{</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">15</span><span>  <span class="kw">const</span> <span class="bracket">[</span><span class="var">products</span><span class="op">,</span> <span class="fn">setProducts</span><span class="bracket">]</span> <span class="op">=</span> <span class="fn">useState</span><span class="op">&lt;</span><span class="type">Product[]</span><span class="op">&gt;</span><span class="bracket">([])</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">16</span><span>  <span class="kw">const</span> <span class="bracket">{</span> <span class="var">user</span> <span class="bracket">}</span> <span class="op">=</span> <span class="fn">useAuth</span><span class="bracket">()</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">17</span><span>  <span class="kw">const</span> <span class="bracket">{</span> <span class="var">cart</span><span class="op">,</span> <span class="var">addToCart</span> <span class="bracket">}</span> <span class="op">=</span> <span class="fn">useCart</span><span class="bracket">()</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">18</span><span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">19</span><span>  <span class="kw">return</span> <span class="bracket">(</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">20</span><span>    <span class="op">&lt;</span><span class="tag">BrowserRouter</span><span class="op">&gt;</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">21</span><span>      <span class="op">&lt;</span><span class="tag">Header</span> <span class="attr">user</span><span class="op">=</span><span class="bracket">{</span><span class="var">user</span><span class="bracket">}</span> <span class="op">/&gt;</span></span></div>
+                        <div class="flex font-mono text-sm leading-relaxed hover:bg-white/[0.02]"><span class="w-12 text-right pr-5 text-slate-600 select-none shrink-0">22</span><span>      <span class="op">&lt;</span><span class="tag">Routes</span><span class="op">&gt;</span>...</span></div>
+                    </div>
+                    <div class="flex items-center justify-between px-3 py-1 bg-dark-900 border-t border-slate-800 text-xs text-slate-500">
+                        <div class="flex items-center gap-4"><span>TypeScript React</span><span>UTF-8</span><span>LF</span></div>
+                        <div class="flex items-center gap-4"><span>Ln 14, Col 1</span><span>Spaces: 2</span><span>Prettier</span></div>
+                    </div>
+                </div>
+
+                <!-- Repo Panel -->
+                <aside class="w-80 bg-dark-900 border-l border-slate-800 flex flex-col shrink-0">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                        <span class="font-grotesk text-sm font-semibold flex items-center gap-2">&#128193; Repositories</span>
+                        <div class="flex gap-1">
+                            <button class="w-6 h-6 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-xs">+</button>
+                            <button class="w-6 h-6 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-xs">&#8635;</button>
+                        </div>
+                    </div>
+                    <div class="px-4 py-3 border-b border-slate-800">
+                        <div class="flex items-center gap-2 px-3 py-1.5 bg-dark-800 border border-slate-800 rounded-md">
+                            <span class="text-slate-600">&#128269;</span>
+                            <input type="text" placeholder="Search repos..." class="flex-1 bg-transparent border-none text-sm text-white outline-none placeholder:text-slate-600">
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-2 space-y-2">
+                        <div class="p-3 bg-dark-800 border border-mint-400 rounded-lg cursor-pointer bg-mint-400/5">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="font-grotesk text-sm font-semibold text-mint-400 flex items-center gap-1.5">&#128722; e-commerce</span>
+                                <div class="flex gap-1">
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-violet-400/15 text-violet-400">Private</span>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-red-400/15 text-red-400">Prod</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 mb-2 line-clamp-2">Full-stack e-commerce platform with React, Node.js and Stripe</p>
+                            <div class="flex items-center gap-3 text-xs text-slate-600"><span class="flex items-center gap-1"><span class="w-2 h-2 bg-blue-400 rounded-full"></span> TypeScript</span><span>&#11088; 24</span></div>
+                        </div>
+                        <div class="p-3 bg-dark-800 border border-slate-800 rounded-lg cursor-pointer hover:border-mint-400 transition-all">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="font-grotesk text-sm font-semibold text-mint-400 flex items-center gap-1.5">&#128136; barber-website</span>
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-mint-400/15 text-mint-400">Public</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mb-2 line-clamp-2">Modern barbershop website with booking</p>
+                        </div>
+                        <div class="p-3 bg-dark-800 border border-slate-800 rounded-lg cursor-pointer hover:border-mint-400 transition-all">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="font-grotesk text-sm font-semibold text-mint-400 flex items-center gap-1.5">&#129408; spawn-orchestrator</span>
+                                <div class="flex gap-1">
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-violet-400/15 text-violet-400">Private</span>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-yellow-400/15 text-yellow-400">Dev</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 mb-2 line-clamp-2">Multi-agent AI orchestration in Rust</p>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+
+            <!-- Terminal -->
+            <div class="h-44 bg-dark-950 border-t border-slate-800 flex flex-col shrink-0">
+                <div class="flex items-center justify-between px-3 py-1.5 bg-dark-900 border-b border-slate-800">
+                    <div class="flex gap-0.5">
+                        <button class="flex items-center gap-1 px-2.5 py-1 bg-dark-800 text-mint-400 font-mono text-xs rounded">&#9889; Terminal</button>
+                        <button class="flex items-center gap-1 px-2.5 py-1 text-slate-500 font-mono text-xs rounded hover:bg-dark-700 hover:text-slate-200">&#128203; Output</button>
+                        <button class="flex items-center gap-1 px-2.5 py-1 text-slate-500 font-mono text-xs rounded hover:bg-dark-700 hover:text-slate-200">&#128027; Debug</button>
+                    </div>
+                    <div class="flex gap-0.5">
+                        <button class="w-5 h-5 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-xs">+</button>
+                        <button class="w-5 h-5 rounded text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-xs">&times;</button>
+                    </div>
+                </div>
+                <div class="flex-1 p-3 font-mono text-xs leading-relaxed overflow-y-auto">
+                    <div class="text-mint-400">FooHut Terminal v1.0.0</div>
+                    <div class="text-slate-400">Type "help" for available commands</div>
+                    <div class="mt-2"><span class="text-mint-400">$</span> <span class="text-white">foo status</span></div>
+                    <div class="text-mint-400">&#10003; On branch main</div>
+                    <div class="text-mint-400">&#10003; Synced with foohut cloud</div>
+                    <div class="text-mint-400">&#10003; 1 file modified (App.tsx)</div>
+                    <div class="mt-2"><span class="text-mint-400">$</span> <span class="cursor-blink inline-block w-2 h-3.5 bg-mint-400 align-middle"></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chat Floating Window -->
+    <div class="fixed bottom-52 right-[340px] w-96 bg-dark-800 border border-slate-800 rounded-2xl shadow-[0_0_0_1px_rgba(139,231,196,0.1),0_20px_50px_rgba(0,0,0,0.5),0_0_80px_rgba(139,231,196,0.05)] flex flex-col overflow-hidden z-[1000]">
+        <div class="flex items-center justify-between px-4 py-3 bg-dark-900 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-mint-400 to-blue-400 flex items-center justify-center text-base">&#10024;</div>
+                <div>
+                    <h3 class="font-grotesk text-sm font-semibold text-white">FooHut AI</h3>
+                    <div class="flex items-center gap-1 text-xs text-mint-400"><span class="w-1.5 h-1.5 bg-mint-400 rounded-full pulse"></span>Ready to help</div>
+                </div>
+            </div>
+            <div class="flex gap-0.5">
+                <button class="w-6 h-6 rounded-md text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-sm">&#8212;</button>
+                <button class="w-6 h-6 rounded-md text-slate-500 hover:bg-dark-700 hover:text-slate-200 flex items-center justify-center text-sm">&times;</button>
+            </div>
+        </div>
+        <div class="flex-1 max-h-80 overflow-y-auto p-3 space-y-3">
+            <!-- AI Message -->
+            <div class="flex gap-2.5">
+                <div class="w-7 h-7 rounded-md bg-gradient-to-br from-mint-400 to-blue-400 flex items-center justify-center text-xs shrink-0">&#10024;</div>
+                <div class="max-w-[85%]">
+                    <div class="px-3.5 py-2.5 bg-dark-700 rounded-xl text-xs leading-relaxed text-slate-300">
+                        Hey Matto! I see you're working on <code class="font-mono bg-dark-900 px-1 py-0.5 rounded text-xs text-mint-400">e-commerce</code>. Need help?
+                    </div>
+                    <div class="text-[10px] text-slate-600 mt-1 px-1.5">2:34 PM</div>
+                </div>
+            </div>
+            <!-- User Message -->
+            <div class="flex gap-2.5 flex-row-reverse">
+                <div class="w-7 h-7 rounded-md bg-gradient-to-br from-violet-400 to-pink-400 flex items-center justify-center text-xs font-semibold shrink-0">MM</div>
+                <div class="max-w-[85%]">
+                    <div class="px-3.5 py-2.5 bg-mint-400/10 rounded-xl text-xs leading-relaxed text-white">
+                        Yeah! Can you add a loading skeleton to ProductCard?
+                    </div>
+                    <div class="text-[10px] text-slate-600 mt-1 px-1.5 text-right">2:35 PM</div>
+                </div>
+            </div>
+            <!-- AI Response with Code -->
+            <div class="flex gap-2.5">
+                <div class="w-7 h-7 rounded-md bg-gradient-to-br from-mint-400 to-blue-400 flex items-center justify-center text-xs shrink-0">&#10024;</div>
+                <div class="max-w-[85%]">
+                    <div class="px-3.5 py-2.5 bg-dark-700 rounded-xl text-xs leading-relaxed text-slate-300">
+                        Sure! Adding skeleton to <code class="font-mono bg-dark-900 px-1 py-0.5 rounded text-xs text-mint-400">ProductCard.tsx</code>:
+                        <div class="mt-2 bg-dark-950 border border-slate-800 rounded-md overflow-hidden">
+                            <div class="flex items-center justify-between px-2.5 py-1.5 bg-dark-900 border-b border-slate-800 text-[10px] text-slate-500">
+                                <span>ProductCard.tsx</span>
+                                <span>+18 lines</span>
+                            </div>
+                            <div class="px-2.5 py-2 font-mono text-xs leading-relaxed overflow-x-auto">
+                                <span class="kw">const</span> <span class="fn">ProductSkeleton</span> = () =&gt; (<br>
+                                &nbsp;&nbsp;&lt;<span class="tag">div</span> <span class="attr">className</span>=<span class="str">"skeleton"</span>&gt;<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="tag">div</span> <span class="attr">className</span>=<span class="str">"skeleton-img"</span> /&gt;<br>
+                                &nbsp;&nbsp;&lt;/<span class="tag">div</span>&gt;)
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-2">
+                        <button class="px-2.5 py-1.5 bg-dark-900 border border-slate-800 rounded-md text-xs text-slate-400 hover:bg-dark-700 hover:text-slate-200 flex items-center gap-1 transition-all">&#128065; Preview</button>
+                        <button class="px-2.5 py-1.5 bg-mint-400 rounded-md text-xs text-dark-950 font-semibold flex items-center gap-1 hover:bg-mint-500 transition-all">&#10003; Apply</button>
+                    </div>
+                    <div class="text-[10px] text-slate-600 mt-1 px-1.5">2:35 PM</div>
+                </div>
+            </div>
+            <!-- User Reply -->
+            <div class="flex gap-2.5 flex-row-reverse">
+                <div class="w-7 h-7 rounded-md bg-gradient-to-br from-violet-400 to-pink-400 flex items-center justify-center text-xs font-semibold shrink-0">MM</div>
+                <div class="max-w-[85%]">
+                    <div class="px-3.5 py-2.5 bg-mint-400/10 rounded-xl text-xs leading-relaxed text-white">
+                        Perfect! Apply it and push to foohut
+                    </div>
+                    <div class="text-[10px] text-slate-600 mt-1 px-1.5 text-right">2:36 PM</div>
+                </div>
+            </div>
+            <!-- Typing Indicator -->
+            <div class="flex items-center gap-2 pl-1 text-xs text-slate-500">
+                <div class="w-5 h-5 rounded bg-gradient-to-br from-mint-400 to-blue-400 flex items-center justify-center text-[10px]">&#10024;</div>
+                <div class="flex gap-1">
+                    <span class="w-1.5 h-1.5 bg-mint-400 rounded-full typing-dot"></span>
+                    <span class="w-1.5 h-1.5 bg-mint-400 rounded-full typing-dot"></span>
+                    <span class="w-1.5 h-1.5 bg-mint-400 rounded-full typing-dot"></span>
+                </div>
+                <span>Applying changes...</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5 p-3 bg-dark-900 border-t border-slate-800">
+            <button class="w-8 h-8 rounded-md text-slate-500 hover:bg-dark-700 hover:text-mint-400 flex items-center justify-center">&#128206;</button>
+            <button class="w-8 h-8 rounded-md text-slate-500 hover:bg-dark-700 hover:text-mint-400 flex items-center justify-center">&#127908;</button>
+            <input type="text" placeholder="Ask AI anything..." class="flex-1 px-3 py-2 bg-dark-800 border border-slate-800 rounded-md text-sm text-white outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-400/25 placeholder:text-slate-600">
+            <button class="w-8 h-8 rounded-md bg-mint-400 text-dark-950 flex items-center justify-center hover:bg-mint-500 hover:shadow-lg hover:shadow-mint-400/25 transition-all">&#10148;</button>
+        </div>
+    </div>
+</body>
+</html>
