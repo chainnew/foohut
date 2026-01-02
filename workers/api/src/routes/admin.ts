@@ -1494,6 +1494,120 @@ admin.patch('/admin/settings/:key', async (c) => {
 });
 
 // ============================================================================
+// Allowed Emails (Whitelist)
+// ============================================================================
+
+interface AllowedEmailRow {
+  id: string;
+  email: string;
+  added_by: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+admin.get('/admin/allowed-emails', async (c) => {
+  try {
+    const results = await c.env.DB.prepare(
+      `SELECT ae.*, u.email as added_by_email
+       FROM allowed_emails ae
+       LEFT JOIN users u ON ae.added_by = u.id
+       ORDER BY ae.created_at DESC`
+    ).all<AllowedEmailRow & { added_by_email: string | null }>();
+
+    const emails = (results.results || []).map((row) => ({
+      id: row.id,
+      email: row.email,
+      addedBy: row.added_by_email || 'System',
+      note: row.note,
+      createdAt: row.created_at,
+    }));
+
+    // Get registration setting
+    const setting = await c.env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = 'allow_registrations'"
+    ).first<{ value: string }>();
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: {
+        emails,
+        registrationsEnabled: setting?.value === 'true',
+      },
+    });
+  } catch (error) {
+    console.error('Get allowed emails error:', error);
+    return c.json<ApiResponse>({ success: false, error: 'Failed to load allowed emails' }, 500);
+  }
+});
+
+admin.post('/admin/allowed-emails', async (c) => {
+  try {
+    const userId = c.get('userId');
+    const body = await c.req.json<{ email: string; note?: string }>();
+
+    if (!body.email?.trim()) {
+      return c.json<ApiResponse>({ success: false, error: 'Email is required' }, 400);
+    }
+
+    const email = body.email.trim().toLowerCase();
+
+    // Check if already exists
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM allowed_emails WHERE email = ?'
+    ).bind(email).first();
+
+    if (existing) {
+      return c.json<ApiResponse>({ success: false, error: 'Email already in whitelist' }, 400);
+    }
+
+    const id = `ae_${crypto.randomUUID().slice(0, 16)}`;
+    const now = new Date().toISOString();
+
+    await c.env.DB.prepare(
+      `INSERT INTO allowed_emails (id, email, added_by, note, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(id, email, userId, body.note || null, now).run();
+
+    await logAdminActivity(c.env.DB, 'Added allowed email', email, 'UserPlus');
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: { id, email },
+      message: `${email} added to whitelist`,
+    });
+  } catch (error) {
+    console.error('Add allowed email error:', error);
+    return c.json<ApiResponse>({ success: false, error: 'Failed to add email' }, 500);
+  }
+});
+
+admin.delete('/admin/allowed-emails/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+
+    const email = await c.env.DB.prepare(
+      'SELECT email FROM allowed_emails WHERE id = ?'
+    ).bind(id).first<{ email: string }>();
+
+    if (!email) {
+      return c.json<ApiResponse>({ success: false, error: 'Email not found' }, 404);
+    }
+
+    await c.env.DB.prepare('DELETE FROM allowed_emails WHERE id = ?').bind(id).run();
+
+    await logAdminActivity(c.env.DB, 'Removed allowed email', email.email, 'UserMinus');
+
+    return c.json<ApiResponse>({
+      success: true,
+      message: `${email.email} removed from whitelist`,
+    });
+  } catch (error) {
+    console.error('Remove allowed email error:', error);
+    return c.json<ApiResponse>({ success: false, error: 'Failed to remove email' }, 500);
+  }
+});
+
+// ============================================================================
 // API Logs
 // ============================================================================
 

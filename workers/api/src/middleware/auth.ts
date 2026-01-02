@@ -311,6 +311,16 @@ async function areRegistrationsAllowed(db: D1Database): Promise<boolean> {
 }
 
 /**
+ * Check if an email is in the allowed whitelist
+ */
+async function isEmailAllowed(db: D1Database, email: string): Promise<boolean> {
+  const allowed = await db.prepare(
+    'SELECT 1 FROM allowed_emails WHERE email = ?'
+  ).bind(email.toLowerCase()).first();
+  return !!allowed;
+}
+
+/**
  * Check if a username is available (not taken and not reserved)
  */
 async function isUsernameAvailable(db: D1Database, username: string): Promise<boolean> {
@@ -441,11 +451,15 @@ async function ensureKindeUser(db: D1Database, payload: KindePayload): Promise<A
     };
   }
 
-  // Check if new registrations are allowed
+  // Check if new registrations are allowed or email is whitelisted
   const registrationsAllowed = await areRegistrationsAllowed(db);
   if (!registrationsAllowed) {
-    // New user registration is disabled
-    return null;
+    // Check if email is in the allowed whitelist
+    const emailAllowed = await isEmailAllowed(db, email);
+    if (!emailAllowed) {
+      // New user registration is disabled and email is not whitelisted
+      return null;
+    }
   }
 
   const userId = crypto.randomUUID();
