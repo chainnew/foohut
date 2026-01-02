@@ -1,124 +1,21 @@
 version: 2
 updates:
-  # Root package dependencies
+  # API Worker dependencies
   - package-ecosystem: "npm"
-    directory: "/"
+    directory: "/workers/api"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "foohut/maintainers"
-    labels:
-      - "dependencies"
-      - "automated"
-    commit-message:
-      prefix: "chore(deps):"
-    groups:
-      typescript:
-        patterns:
-          - "typescript"
-          - "@types/*"
-      eslint:
-        patterns:
-          - "eslint*"
-          - "@typescript-eslint/*"
-      testing:
-        patterns:
-          - "jest*"
-          - "@testing-library/*"
-          - "vitest*"
-
-  # Backend dependencies
-  - package-ecosystem: "npm"
-    directory: "/backend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "foohut/maintainers"
-    labels:
-      - "dependencies"
-      - "backend"
-      - "automated"
-    commit-message:
-      prefix: "chore(deps-backend):"
-    groups:
-      express:
-        patterns:
-          - "express*"
-          - "@types/express*"
-      database:
-        patterns:
-          - "pg"
-          - "pg-*"
-          - "drizzle*"
-          - "prisma*"
-
-  # Frontend dependencies
-  - package-ecosystem: "npm"
-    directory: "/frontend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "foohut/maintainers"
-    labels:
-      - "dependencies"
-      - "frontend"
-      - "automated"
-    commit-message:
-      prefix: "chore(deps-frontend):"
-    groups:
-      react:
-        patterns:
-          - "react*"
-          - "@types/react*"
-      vite:
-        patterns:
-          - "vite*"
-          - "@vitejs/*"
-
-  # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
     open-pull-requests-limit: 5
-    reviewers:
-      - "foohut/maintainers"
-    labels:
-      - "dependencies"
-      - "github-actions"
-      - "automated"
     commit-message:
-      prefix: "chore(actions):"
+      prefix: "chore(deps-api):"
 
-  # Docker images
-  - package-ecosystem: "docker"
-    directory: "/"
+  # Frontend UI dependencies
+  - package-ecosystem: "npm"
+    directory: "/foohut.ui"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
     open-pull-requests-limit: 5
-    reviewers:
-      - "foohut/maintainers"
-    labels:
-      - "dependencies"
-      - "docker"
-      - "automated"
     commit-message:
-      prefix: "chore(docker):"
+      prefix: "chore(deps-ui):"

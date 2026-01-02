@@ -301,6 +301,16 @@ function generateUsernameFromEmail(email: string): string | null {
 }
 
 /**
+ * Check if new registrations are allowed
+ */
+async function areRegistrationsAllowed(db: D1Database): Promise<boolean> {
+  const setting = await db.prepare(
+    "SELECT value FROM system_settings WHERE key = 'allow_registrations'"
+  ).first<{ value: string }>();
+  return setting?.value === 'true';
+}
+
+/**
  * Check if a username is available (not taken and not reserved)
  */
 async function isUsernameAvailable(db: D1Database, username: string): Promise<boolean> {
@@ -429,6 +439,13 @@ async function ensureKindeUser(db: D1Database, payload: KindePayload): Promise<A
       role: byEmail.role,
       is_admin: byEmail.is_admin === 1
     };
+  }
+
+  // Check if new registrations are allowed
+  const registrationsAllowed = await areRegistrationsAllowed(db);
+  if (!registrationsAllowed) {
+    // New user registration is disabled
+    return null;
   }
 
   const userId = crypto.randomUUID();

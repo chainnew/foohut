@@ -1439,4 +1439,58 @@ admin.patch('/admin/items/:itemId', async (c) => {
   }
 });
 
+// ============================================================================
+// Settings
+// ============================================================================
+
+admin.get('/admin/settings', async (c) => {
+  try {
+    const results = await c.env.DB.prepare(
+      'SELECT key, value, updated_at, updated_by FROM system_settings ORDER BY key ASC'
+    ).all<{ key: string; value: string; updated_at: string; updated_by: string | null }>();
+
+    const settings = (results.results || []).reduce((acc, row) => {
+      acc[row.key] = {
+        value: row.value,
+        updatedAt: row.updated_at,
+        updatedBy: row.updated_by,
+      };
+      return acc;
+    }, {} as Record<string, { value: string; updatedAt: string; updatedBy: string | null }>);
+
+    return c.json<ApiResponse>({ success: true, data: settings });
+  } catch (error) {
+    console.error('Admin settings error:', error);
+    return c.json<ApiResponse>({ success: false, error: 'Failed to load settings' }, 500);
+  }
+});
+
+admin.patch('/admin/settings/:key', async (c) => {
+  try {
+    const key = c.req.param('key');
+    const body = await c.req.json<{ value: string }>();
+    const userId = c.get('userId');
+
+    if (body.value === undefined) {
+      return c.json<ApiResponse>({ success: false, error: 'Value is required' }, 400);
+    }
+
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(
+      `INSERT INTO system_settings (key, value, updated_at, updated_by)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?, updated_by = ?`
+    )
+      .bind(key, body.value, now, userId, body.value, now, userId)
+      .run();
+
+    await logAdminActivity(c.env.DB, 'Updated setting', `${key} = ${body.value}`, 'Settings');
+
+    return c.json<ApiResponse>({ success: true });
+  } catch (error) {
+    console.error('Update setting error:', error);
+    return c.json<ApiResponse>({ success: false, error: 'Failed to update setting' }, 500);
+  }
+});
+
 export default admin;
