@@ -226,6 +226,9 @@ users.patch('/me', requireAuth, async (c) => {
 users.get('/@:username', async (c) => {
   try {
     const raw = c.req.param('username');
+    if (!raw) {
+      return c.json<ApiResponse>({ success: false, error: 'Username required' }, 400);
+    }
     const username = normalizeUsername(raw);
 
     const user = await c.env.DB.prepare(

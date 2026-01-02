@@ -93,7 +93,7 @@ friends.post('/request/:userId', async (c) => {
   try {
     const fromUserId = c.get('userId');
     const toUserId = c.req.param('userId');
-    const body = await c.req.json<{ message?: string }>().catch(() => ({}));
+    const body = await c.req.json<{ message?: string }>().catch(() => ({} as { message?: string }));
 
     if (fromUserId === toUserId) {
       return c.json<ApiResponse>({ success: false, error: 'Cannot send friend request to yourself' }, 400);

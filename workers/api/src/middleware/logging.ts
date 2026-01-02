@@ -88,7 +88,7 @@ export function loggingMiddleware() {
 
     let error: string | undefined;
     let errorStack: string | undefined;
-    let status: number;
+    let status = 0;
 
     try {
       await next();
@@ -122,7 +122,7 @@ export function loggingMiddleware() {
         path,
         status,
         duration_ms: duration,
-        user_id: user?.userId,
+        user_id: user?.id,
         user_email: user?.email,
         ip_address: ipAddress,
         user_agent: userAgent,
