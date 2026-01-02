@@ -24,6 +24,7 @@ import users from './routes/users';
 
 // Import middleware
 import { subdomainMiddleware } from './middleware/subdomain';
+import { loggingMiddleware } from './middleware/logging';
 
 // Create the main Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -31,6 +32,7 @@ const app = new Hono<{ Bindings: Env }>();
 // Global middleware
 app.use('*', logger());
 app.use('*', prettyJSON());
+app.use('*', loggingMiddleware());
 
 // CORS configuration
 app.use('*', cors({

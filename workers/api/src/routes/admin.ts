@@ -1493,4 +1493,140 @@ admin.patch('/admin/settings/:key', async (c) => {
   }
 });
 
+// ============================================================================
+// API Logs
+// ============================================================================
+
+interface ApiLogRow {
+  id: string;
+  timestamp: string;
+  level: string;
+  method: string;
+  path: string;
+  status: number | null;
+  duration_ms: number | null;
+  user_id: string | null;
+  user_email: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  request_id: string;
+  error: string | null;
+  error_stack: string | null;
+  metadata: string | null;
+  created_at: string;
+}
+
+admin.get('/admin/logs', async (c) => {
+  try {
+    const url = new URL(c.req.url);
+    const level = url.searchParams.get('level');
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
+    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+    const search = url.searchParams.get('search');
+
+    let query = 'SELECT * FROM api_logs';
+    const conditions: string[] = [];
+    const bindings: (string | number)[] = [];
+
+    if (level && level !== 'all') {
+      conditions.push('level = ?');
+      bindings.push(level);
+    }
+
+    if (search) {
+      conditions.push('(path LIKE ? OR error LIKE ? OR user_email LIKE ?)');
+      const searchPattern = `%${search}%`;
+      bindings.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+    bindings.push(limit, offset);
+
+    const results = await c.env.DB.prepare(query).bind(...bindings).all<ApiLogRow>();
+
+    // Get total count for pagination
+    let countQuery = 'SELECT COUNT(*) as count FROM api_logs';
+    if (conditions.length > 0) {
+      countQuery += ' WHERE ' + conditions.join(' AND ');
+    }
+    const countBindings = bindings.slice(0, -2); // Remove limit/offset
+    const countResult = await c.env.DB.prepare(countQuery)
+      .bind(...countBindings)
+      .first<{ count: number }>();
+
+    const logs = (results.results || []).map((log) => ({
+      id: log.id,
+      timestamp: log.timestamp,
+      level: log.level,
+      method: log.method,
+      path: log.path,
+      status: log.status,
+      durationMs: log.duration_ms,
+      userId: log.user_id,
+      userEmail: log.user_email,
+      ipAddress: log.ip_address,
+      userAgent: log.user_agent,
+      requestId: log.request_id,
+      error: log.error,
+      errorStack: log.error_stack,
+      metadata: log.metadata ? JSON.parse(log.metadata) : null,
+    }));
+
+    // Get stats
+    const statsResults = await c.env.DB.prepare(`
+      SELECT
+        level,
+        COUNT(*) as count
+      FROM api_logs
+      WHERE timestamp > datetime('now', '-24 hours')
+      GROUP BY level
+    `).all<{ level: string; count: number }>();
+
+    const stats = {
+      total: countResult?.count ?? 0,
+      byLevel: (statsResults.results || []).reduce((acc, row) => {
+        acc[row.level] = row.count;
+        return acc;
+      }, {} as Record<string, number>),
+    };
+
+    return c.json<ApiResponse>({ success: true, data: { logs, stats } });
+  } catch (error) {
+    console.error('Admin logs error:', error);
+    return c.json<ApiResponse>({ success: false, error: 'Failed to load logs' }, 500);
+  }
+});
+
+admin.delete('/admin/logs', async (c) => {
+  try {
+    const url = new URL(c.req.url);
+    const olderThanDays = parseInt(url.searchParams.get('olderThanDays') || '7', 10);
+
+    const result = await c.env.DB.prepare(
+      `DELETE FROM api_logs WHERE timestamp < datetime('now', '-' || ? || ' days')`
+    )
+      .bind(olderThanDays)
+      .run();
+
+    await logAdminActivity(
+      c.env.DB,
+      'Cleared old logs',
+      `Deleted logs older than ${olderThanDays} days`,
+      'Trash2'
+    );
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: { deleted: result.meta?.changes ?? 0 },
+    });
+  } catch (error) {
+    console.error('Clear logs error:', error);
+    return c.json<ApiResponse>({ success: false, error: 'Failed to clear logs' }, 500);
+  }
+});
+
 export default admin;
