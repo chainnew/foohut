@@ -185,7 +185,7 @@ jobs:
           NODE_ENV: test
 
       - name: Upload backend coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: backend/coverage/lcov.info
           flags: backend
@@ -230,7 +230,7 @@ jobs:
           CI: true
 
       - name: Upload frontend coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: frontend/coverage/lcov.info
           flags: frontend
